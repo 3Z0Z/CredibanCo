@@ -1,12 +1,14 @@
 package com.credibanco.assessment.card.service.impl;
 
 import com.credibanco.assessment.card.dto.*;
+import com.credibanco.assessment.card.exceptions.*;
 import com.credibanco.assessment.card.model.*;
 import com.credibanco.assessment.card.model.enums.*;
 import com.credibanco.assessment.card.repository.*;
 import com.credibanco.assessment.card.service.Servicio;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataAccessException;
@@ -14,6 +16,9 @@ import org.springframework.stereotype.Service;
 
 @Service
 public class ServicioImpl implements Servicio{
+    
+    @Autowired
+    private ClienteRepository clienteRepo;
     
     @Autowired
     private TarjetaRepository tarjetaRepo;
@@ -29,8 +34,7 @@ public class ServicioImpl implements Servicio{
     }
     
     private static int genNumValidacion(){
-        int numValidacion;
-        return numValidacion = (int) (Math.floor(Math.random()*(100-1+1))+1);
+        return (int) (Math.floor(Math.random()*(100-1+1))+1);
     }
     
     private static boolean obtenerTiempo(LocalDateTime tiempoCompra){
@@ -43,126 +47,104 @@ public class ServicioImpl implements Servicio{
 
     @Override
     public CrearTarjetaDTO crearTarjeta(CrearTarjetaDTO request) {
-        Cliente cliente = new Cliente(request.getNombre(), request.getApellidoPaterno(), request.getApellidoMaterno(), request.getCedula(), request.getTelefono());
-        Tarjeta tarjeta = new Tarjeta(request.getPan(), genNumValidacion(), request.getTipo(), TarjetaEstadoEnum.CREADA, cliente);
-        Tarjeta tarGuardada = this.tarjetaRepo.save(tarjeta);
-        CrearTarjetaDTO response = new CrearTarjetaDTO(enmascararPan(request.getPan()), tarjeta.getNumValidacion());
-        if(tarGuardada != null){
-            response.setMensaje("Exito");
-            response.setCodigo(CodigoRespuesta.CERO);
-        } else {
-            response.setMensaje("Fallo");
-            response.setCodigo(CodigoRespuesta.UNO);
+        Cliente cliente = this.clienteRepo.findByCedulaOrTelefono(request.getCedula(), request.getTelefono());
+        Tarjeta tarjeta = this.tarjetaRepo.findByPan(request.getPan());
+        if(cliente != null || tarjeta != null){
+            throw new RegistroExistenteException("Cliente o tarjeta ya existente en el sistema");
         }
-        return response;
+        cliente = new Cliente(request.getNombre(), request.getApellidoPaterno(), request.getApellidoMaterno(), request.getCedula(), request.getTelefono());
+        tarjeta = new Tarjeta(request.getPan(), genNumValidacion(), request.getTipo(), TarjetaEstadoEnum.CREADA, cliente);
+        try{
+            this.tarjetaRepo.save(tarjeta);
+            return new CrearTarjetaDTO(enmascararPan(request.getPan()), tarjeta.getNumValidacion(), CodigoRespuesta.CERO, "Exito");
+        } catch(Exception e){
+            throw new NoGuardadoException("Error al procesar la informacion", e);
+        }
     }
 
     @Override
     public EnrolarTarjetaDTO enrolarTarjeta(EnrolarTarjetaDTO request) {
         Tarjeta tarjeta = this.tarjetaRepo.findByPan(request.getPan());
-        EnrolarTarjetaDTO response = new EnrolarTarjetaDTO(enmascararPan(tarjeta.getPan()));
-        if(tarjeta.getPan() == null){
-            response.setCodigo(CodigoRespuesta.UNO);
-            response.setMensaje("Tarjeta no existe");
-        } else if(request.getNumValidacion() != tarjeta.getNumValidacion()) {
-            response.setCodigo(CodigoRespuesta.DOS);
-            response.setMensaje("Numero de validacion invalido");
-        } else {
+        if(tarjeta == null){
+            return new EnrolarTarjetaDTO(enmascararPan(request.getPan()), CodigoRespuesta.UNO, "Tarjeta no existe");
+        }
+        if(request.getNumValidacion() != tarjeta.getNumValidacion()) {
+            return new EnrolarTarjetaDTO(enmascararPan(tarjeta.getPan()), CodigoRespuesta.DOS, "Numero de validacion invalido");
+        }
+        try{
             tarjeta.setEstado(TarjetaEstadoEnum.ENROLADA);
             this.tarjetaRepo.save(tarjeta);
-            response.setCodigo(CodigoRespuesta.CERO);
-            response.setMensaje("Exito");
+            return new EnrolarTarjetaDTO(enmascararPan(tarjeta.getPan()), CodigoRespuesta.CERO, "Exito");
+        } catch(NoGuardadoException e){
+            throw new NoGuardadoException("Error al procesar la informacion", e);
         }
-        return response;
     }
 
     @Override
     public ConsultarTarjetaDTO consultarTarjeta(ConsultarTarjetaDTO request) {
         Tarjeta tarjeta = this.tarjetaRepo.findByPan(request.getPan());
+        if(tarjeta == null){
+            throw new NoEncontradoException("El numero PAN proporcionado no esta registrado");
+        }
         Cliente cliente = tarjeta.getCliente();
-        ConsultarTarjetaDTO response = new ConsultarTarjetaDTO(enmascararPan(tarjeta.getPan()), cliente.getNombre(), cliente.getApellidoPaterno(), cliente.getApellidoMaterno(), cliente.getCedula(), cliente.getTelefono(), tarjeta.getEstado());
-        return response;
+        return new ConsultarTarjetaDTO(enmascararPan(tarjeta.getPan()), cliente.getNombre(), cliente.getApellidoPaterno(), cliente.getApellidoMaterno(), cliente.getCedula(), cliente.getTelefono(), tarjeta.getEstado());
     }
 
     @Override
     public EliminarTarjetaDTO eliminarTarjeta(EliminarTarjetaDTO request) {
         Tarjeta tarjeta = this.tarjetaRepo.findByPan(request.getPan());
-        EliminarTarjetaDTO response = new EliminarTarjetaDTO();
-        if (tarjeta != null) {
-            if(request.getPan().equals(request.getPanConfirm()) && request.getNumValidacion() == tarjeta.getNumValidacion()){
-                try {
-                    List<Transaccion> transacciones = this.transaccionRepo.findByIdTarjeta(tarjeta.getIdTarjeta());
-                    this.transaccionRepo.deleteAll(transacciones);
-
-                    this.tarjetaRepo.delete(tarjeta);
-                    response.setCodigo(CodigoRespuesta.CERO);
-                    response.setMensaje("Se ha eliminado la tarjeta");
-                } catch (DataAccessException e){
-                    response.setCodigo(CodigoRespuesta.UNO);
-                    response.setMensaje("No se ha eliminar la tarjeta");
-                }
-            } else {
-                response.setCodigo(CodigoRespuesta.UNO);
-                response.setMensaje("No se ha eliminar la tarjeta");
-            }
-        } else {
-            response.setCodigo(CodigoRespuesta.UNO);
-            response.setMensaje("No se ha eliminar la tarjeta");
+        if (tarjeta == null) {
+            return new EliminarTarjetaDTO(CodigoRespuesta.UNO, "La tarjeta no existe");
         }
-        return response;
+        if(!request.getPan().equals(request.getPanConfirm()) && request.getNumValidacion() != tarjeta.getNumValidacion()){
+            return new EliminarTarjetaDTO(CodigoRespuesta.UNO, "No se ha eliminado la tarjeta");
+        }
+        try {
+            List<Transaccion> transacciones = this.transaccionRepo.findByIdTarjeta(tarjeta.getIdTarjeta());
+            this.transaccionRepo.deleteAll(transacciones);
+            this.tarjetaRepo.delete(tarjeta);
+            return new EliminarTarjetaDTO(CodigoRespuesta.CERO, "Se ha eliminado la tarjeta");
+        } catch (DataAccessException e){
+            return new EliminarTarjetaDTO(CodigoRespuesta.UNO, "No se ha eliminado la tarjeta");
+        }
     }
 
     @Override
     public CrearTransaccionDTO crearTransaccion(CrearTransaccionDTO request) {
         Tarjeta tarjeta = this.tarjetaRepo.findByPan(request.getPan());
-        CrearTransaccionDTO response = new CrearTransaccionDTO(request.getNumReferencia());
-        if(tarjeta != null){
-            Transaccion transaccion = new Transaccion(request.getNumReferencia(), request.getTotalCompra(), request.getDireccionCompra(), TransaccionEstadoEnum.RECHAZADA, LocalDateTime.now(), tarjeta);
-            if(tarjeta.getEstado().equals(TarjetaEstadoEnum.ENROLADA)){
-                transaccion.setEstado(TransaccionEstadoEnum.APROVADA);
-                Transaccion tranGuardada = this.transaccionRepo.save(transaccion);
-                if(tranGuardada != null){
-                    response.setCodigo(CodigoRespuesta.CERO);
-                    response.setMensaje("Compra exitosa");
-                    response.setEstado(tranGuardada.getEstado());
-                }
-            } else {
-                response.setCodigo(CodigoRespuesta.DOS);
-                response.setMensaje("Tarjeta no enrolada");
-                response.setEstado(transaccion.getEstado());
-            }    
-        } else {
-            response.setCodigo(CodigoRespuesta.UNO);
-            response.setMensaje("Tarjeta no existe");
-            response.setEstado(TransaccionEstadoEnum.RECHAZADA);
-        }        
-        return response;
+        if(tarjeta == null){
+            return new CrearTransaccionDTO(request.getNumReferencia(), TransaccionEstadoEnum.RECHAZADA,"Tarjeta no existe", CodigoRespuesta.UNO);
+        }
+        if(!tarjeta.getEstado().equals(TarjetaEstadoEnum.ENROLADA)){
+            return new CrearTransaccionDTO(request.getNumReferencia(), TransaccionEstadoEnum.RECHAZADA, "Tarjeta no enrolada", CodigoRespuesta.DOS);
+        }
+        Transaccion tran = new Transaccion(request.getNumReferencia(), request.getTotalCompra(), request.getDireccionCompra(), TransaccionEstadoEnum.APROVADA, LocalDateTime.now(ZoneId.systemDefault()), tarjeta);
+        try {
+            this.transaccionRepo.save(tran);
+            return new CrearTransaccionDTO(tran.getNumReferencia(), tran.getEstado(), "Compra exitosa", CodigoRespuesta.CERO);
+        } catch(Exception e){
+            throw new NoGuardadoException("Error al procesar la informacion", e);
+        }
     }
 
     @Override
     public AnularTransaccionDTO anularTransaccion(AnularTransaccionDTO request) {
-        Transaccion transaccion = this.transaccionRepo.findByNumReferenciaAndTotalCompra(request.getNumReferencia(), request.getTotalCompra());
-        Tarjeta tarjeta = transaccion.getTarjeta();
-        AnularTransaccionDTO response = new AnularTransaccionDTO(request.getNumReferencia());
-        if(tarjeta != null){
-            if(request.getNumReferencia().equals(transaccion.getNumReferencia())){
-                if(obtenerTiempo(transaccion.getHoraCompra())){
-                    transaccion.setEstado(TransaccionEstadoEnum.ANULADA);
-                    this.transaccionRepo.save(transaccion);
-                    response.setCodigo(CodigoRespuesta.CERO);
-                    response.setMensaje("Compra Anulada");
-                } else {
-                    response.setCodigo(CodigoRespuesta.DOS);
-                    response.setMensaje("No se puede anular transaccion");
-                }
-            } else {
-                response.setCodigo(CodigoRespuesta.UNO);
-                response.setMensaje("Numero de referencia invalido");
-            }
-        } else {
-            response.setCodigo(CodigoRespuesta.DOS);
-            response.setMensaje("No se puede anular transaccion");
+        Transaccion transaccion = this.transaccionRepo.findByNumReferenciaAndTotalCompraAndEstado(request.getNumReferencia(), request.getTotalCompra(), TransaccionEstadoEnum.APROVADA);
+        if(transaccion == null){
+            throw new NoEncontradoException("Transaccion no encontrada o ya esta anulada");
         }
-        return response;
+        if(!request.getNumReferencia().equals(transaccion.getNumReferencia())){
+            return new AnularTransaccionDTO(request.getNumReferencia(), CodigoRespuesta.UNO, "Numero de referencia invalido");
+        }
+        if(!obtenerTiempo(transaccion.getHoraCompra())){
+            return new AnularTransaccionDTO(request.getNumReferencia(), CodigoRespuesta.DOS, "No se puede anular transaccion");
+        }
+        try{
+            transaccion.setEstado(TransaccionEstadoEnum.ANULADA);
+            this.transaccionRepo.save(transaccion);
+            return new AnularTransaccionDTO(transaccion.getNumReferencia(), CodigoRespuesta.CERO, "Compra Anulada");
+        } catch(NoGuardadoException e){
+            throw new NoGuardadoException("Error al procesar la informacion", e);
+        }
     }
 }

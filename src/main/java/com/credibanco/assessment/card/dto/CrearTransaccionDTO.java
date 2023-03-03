@@ -1,6 +1,7 @@
 package com.credibanco.assessment.card.dto;
 
 import com.credibanco.assessment.card.model.enums.TransaccionEstadoEnum;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import java.math.BigDecimal;
 import jakarta.validation.constraints.*;
 import java.time.LocalDateTime;
@@ -9,6 +10,7 @@ import org.springframework.stereotype.Component;
 
 @Component
 @Scope("prototype")
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public class CrearTransaccionDTO {
     
     @NotBlank(message = "El numero pan es requerido")
@@ -37,6 +39,8 @@ public class CrearTransaccionDTO {
     private TransaccionEstadoEnum estado;
     
     private LocalDateTime horaCompra;
+    
+    public CrearTransaccionDTO(){ }
 
     //RequestDTO
     public CrearTransaccionDTO(String pan, String numReferencia, BigDecimal totalCompra, String direccionCompra) {
@@ -47,8 +51,11 @@ public class CrearTransaccionDTO {
     }
 
     //ResponseDTO
-    public CrearTransaccionDTO(String numReferencia) {
+    public CrearTransaccionDTO(String numReferencia, TransaccionEstadoEnum estado,String mensaje, String codigo) {
         this.numReferencia = numReferencia;
+        this.estado = estado;
+        this.mensaje = mensaje;
+        this.codigo = codigo;
     }
 
     public String getDireccionCompra() {

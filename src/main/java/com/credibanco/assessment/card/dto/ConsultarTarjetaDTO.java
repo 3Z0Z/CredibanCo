@@ -1,6 +1,7 @@
 package com.credibanco.assessment.card.dto;
 
 import com.credibanco.assessment.card.model.enums.TarjetaEstadoEnum;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
 import org.springframework.context.annotation.Scope;
@@ -8,6 +9,7 @@ import org.springframework.stereotype.Component;
 
 @Component
 @Scope("prototype")
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public class ConsultarTarjetaDTO {
     
     @NotBlank(message = "El numero pan es requerido")
@@ -28,7 +30,7 @@ public class ConsultarTarjetaDTO {
         this.pan = pan;
     }
 
-    //ResponseDTO
+    //ResponseDTO Ok
     public ConsultarTarjetaDTO(String pan, String nombre, String apellidoPaterno, String apellidoMaterno, String cedula, String telefono, TarjetaEstadoEnum estado) {
         this.pan = pan;
         this.nombre = nombre;
@@ -38,7 +40,7 @@ public class ConsultarTarjetaDTO {
         this.telefono = telefono;
         this.estado = estado;
     }
-
+    
     public TarjetaEstadoEnum getEstado() {
         return estado;
     }

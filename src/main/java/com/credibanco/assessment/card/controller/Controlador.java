@@ -1,17 +1,21 @@
 package com.credibanco.assessment.card.controller;
 
 import com.credibanco.assessment.card.dto.*;
+import com.credibanco.assessment.card.exceptions.ErrorMessage;
+import com.credibanco.assessment.card.exceptions.NoGuardadoException;
+import com.credibanco.assessment.card.exceptions.RegistroExistenteException;
+import com.credibanco.assessment.card.exceptions.NoEncontradoException;
 import com.credibanco.assessment.card.model.enums.CodigoRespuesta;
 import com.credibanco.assessment.card.service.Servicio;
 import java.util.HashMap;
 import java.util.Map;
 import javax.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataAccessException;
 import org.springframework.http.*;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.server.ResponseStatusException;
 
 @RestController
 @RequestMapping("/credibanco")
@@ -23,53 +27,97 @@ public class Controlador {
     
     @PostMapping("/nueva")
     @ResponseBody
-    public CrearTarjetaDTO crearTarjeta(@RequestBody @Valid CrearTarjetaDTO request){
-        CrearTarjetaDTO response = this.servicio.crearTarjeta(request);
-        if(response.getCodigo().equals(CodigoRespuesta.UNO)){
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Error en la inserción de la tarjeta");
+    public ResponseEntity<Object> crearTarjeta(@RequestBody @Valid CrearTarjetaDTO request){
+        try{
+            CrearTarjetaDTO response = this.servicio.crearTarjeta(request);
+            return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        } catch(NoGuardadoException e) {
+            ErrorMessage error = new ErrorMessage(CodigoRespuesta.UNO, "Fallido");
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
+        } catch(RegistroExistenteException e){
+            ErrorMessage error = new ErrorMessage(CodigoRespuesta.UNO, "Cliente ya existente en el sistema");
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(error);
         }
-        return response;
     }
     
     @PutMapping("/enrolar")
     @ResponseBody
-    public EnrolarTarjetaDTO enrolarTarjeta(@RequestBody @Valid EnrolarTarjetaDTO request){
-        EnrolarTarjetaDTO response = this.servicio.enrolarTarjeta(request);
-        return response;
+    public ResponseEntity<Object> enrolarTarjeta(@RequestBody @Valid EnrolarTarjetaDTO request){
+        try{
+            EnrolarTarjetaDTO response = this.servicio.enrolarTarjeta(request);
+            return switch (response.getCodigo()){
+                case CodigoRespuesta.UNO -> ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
+                case CodigoRespuesta.DOS -> ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+                default -> ResponseEntity.ok().body(response);
+            };
+        } catch(NoGuardadoException e){
+            ErrorMessage error = new ErrorMessage(CodigoRespuesta.UNO, "Fallido");
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
+        }
     }
     
     @GetMapping("/consulta/{pan}")
     @ResponseBody
-    public ConsultarTarjetaDTO consultarTarjeta(@PathVariable("pan") String pan){
-        ConsultarTarjetaDTO request = new ConsultarTarjetaDTO();
-        request.setPan(pan);
-        ConsultarTarjetaDTO response = this.servicio.consultarTarjeta(request);
-        return response;
+    public ResponseEntity<Object> consultarTarjeta(@PathVariable("pan") String pan){
+        ConsultarTarjetaDTO request = new ConsultarTarjetaDTO(pan);
+        try{
+            ConsultarTarjetaDTO response = this.servicio.consultarTarjeta(request);
+            return ResponseEntity.ok().body(response);
+        } catch(NoEncontradoException e){
+            ConsultarTarjetaDTO response = new ConsultarTarjetaDTO("El numero PAN proporcionado no esta registrado");
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
+        }
     }
     
-    @DeleteMapping("/eliminar?{pan}&{numValidacion}&panConfirm")
+    @DeleteMapping("/eliminar/{pan}/{numValidacion}/{panConfirm}")
     @ResponseBody
-    public EliminarTarjetaDTO eliminarTarjeta(@PathVariable("pan") String pan, @PathVariable("numValidacion") int nunValidacion, @PathVariable("panConfirm") String panConfirm){
-        EliminarTarjetaDTO request = new EliminarTarjetaDTO();
-        request.setPan(pan);
-        request.setNumValidacion(nunValidacion);
-        request.setPanConfirm(panConfirm);
-        EliminarTarjetaDTO response = this.servicio.eliminarTarjeta(request);
-        return response;
+    public ResponseEntity<Object> eliminarTarjeta(@PathVariable("pan") String pan, @PathVariable("numValidacion") int nunValidacion, @PathVariable("panConfirm") String panConfirm){
+        EliminarTarjetaDTO request = new EliminarTarjetaDTO(pan, nunValidacion, panConfirm);
+        try{
+            EliminarTarjetaDTO response = this.servicio.eliminarTarjeta(request);
+            return switch (response.getCodigo()){
+                case CodigoRespuesta.UNO -> ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+                default -> ResponseEntity.ok(response);
+            };
+        } catch(DataAccessException e){
+            ErrorMessage error = new ErrorMessage("Error al intentar eliminar");
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
+        }
     }
     
     @PostMapping("/transaccion")
     @ResponseBody
-    public CrearTransaccionDTO crearTransaccion(@RequestBody @Valid CrearTransaccionDTO request){
-        CrearTransaccionDTO response = this.servicio.crearTransaccion(request);
-        return response;
+    public ResponseEntity<Object> crearTransaccion(@RequestBody @Valid CrearTransaccionDTO request){
+        try{
+            CrearTransaccionDTO response = this.servicio.crearTransaccion(request);
+            return switch (response.getCodigo()){
+                case CodigoRespuesta.UNO -> ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+                case CodigoRespuesta.DOS -> ResponseEntity.status(HttpStatus.FORBIDDEN).body(response);
+                default -> ResponseEntity.ok(response);
+            };
+        } catch(NoGuardadoException e){
+            ErrorMessage error = new ErrorMessage("No se ha procesado la solicitud correctamente");
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
+        }
     }
     
     @PutMapping("/anular")
     @ResponseBody
-    public AnularTransaccionDTO anularTransaccion(@RequestBody @Valid AnularTransaccionDTO request){
-        AnularTransaccionDTO response = this.servicio.anularTransaccion(request);
-        return response;
+    public ResponseEntity<Object> anularTransaccion(@RequestBody @Valid AnularTransaccionDTO request){
+        try {
+            AnularTransaccionDTO response = this.servicio.anularTransaccion(request);
+            return switch (response.getCodigo()){
+                case CodigoRespuesta.UNO -> ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+                case CodigoRespuesta.DOS -> ResponseEntity.status(HttpStatus.CONFLICT).body(response);
+                default -> ResponseEntity.ok().body(response);
+            };
+        } catch(NoEncontradoException e) {
+            ErrorMessage error = new ErrorMessage("Transaccion no encontrada o ya esta anulada");
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
+        } catch(NoGuardadoException e){
+            ErrorMessage error = new ErrorMessage("No se ha procesado la solicitud correctamente");
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
+        }
     }
     
     @ExceptionHandler(MethodArgumentNotValidException.class)

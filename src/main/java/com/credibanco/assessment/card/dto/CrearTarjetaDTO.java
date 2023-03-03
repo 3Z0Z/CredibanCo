@@ -1,12 +1,14 @@
 package com.credibanco.assessment.card.dto;
 
 import com.credibanco.assessment.card.model.enums.TarjetaTipoEnum;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import jakarta.validation.constraints.*;
 import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Component;
 
 @Component
 @Scope("prototype")
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public class CrearTarjetaDTO {
     
     @NotBlank(message = "El numero pan es requerido")
@@ -62,9 +64,11 @@ public class CrearTarjetaDTO {
     }
 
     //ResponseDTO
-    public CrearTarjetaDTO(String pan, int numValidacion) {
+    public CrearTarjetaDTO(String pan, int numValidacion, String codigo, String mensaje) {
         this.pan = pan;
         this.numValidacion = numValidacion;
+        this.codigo = codigo;
+        this.mensaje = mensaje;
     }
     
     public String getPan() {

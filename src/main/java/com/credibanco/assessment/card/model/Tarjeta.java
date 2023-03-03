@@ -34,6 +34,8 @@ public class Tarjeta implements Serializable{
     @ManyToOne(fetch = FetchType.LAZY, cascade = {CascadeType.ALL})
     @JoinColumn(name = "id_cliente")
     private Cliente cliente;
+    
+    public Tarjeta() { }
 
     public Tarjeta(String pan, int numValidacion, TarjetaTipoEnum tipo, TarjetaEstadoEnum estado, Cliente cliente) {
         this.pan = pan;
@@ -43,15 +45,13 @@ public class Tarjeta implements Serializable{
         this.cliente = cliente;
     }
 
-    public Tarjeta() { }
-
     public Tarjeta(String pan, int numValidacion, TarjetaTipoEnum tipo, TarjetaEstadoEnum estado) {
         this.pan = pan;
         this.numValidacion = numValidacion;
         this.tipo = tipo;
         this.estado = estado;
     }
-
+    
     public Tarjeta(String pan, int numValidacion) {
         this.pan = pan;
         this.numValidacion = numValidacion;

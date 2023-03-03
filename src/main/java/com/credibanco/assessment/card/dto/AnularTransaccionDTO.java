@@ -1,8 +1,14 @@
 package com.credibanco.assessment.card.dto;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import jakarta.validation.constraints.*;
 import java.math.BigDecimal;
+import org.springframework.context.annotation.Scope;
+import org.springframework.stereotype.Component;
 
+@Component
+@Scope("prototype")
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public class AnularTransaccionDTO {
     
     @NotBlank(message = "El numero pan es requerido")
@@ -23,6 +29,8 @@ public class AnularTransaccionDTO {
     private String codigo;
     
     private String mensaje;
+    
+    public AnularTransaccionDTO() { }
 
     //RequestDTO
     public AnularTransaccionDTO(String pan, String numReferencia, BigDecimal totalCompra) {
@@ -32,8 +40,10 @@ public class AnularTransaccionDTO {
     }
 
     //ResponseDTO
-    public AnularTransaccionDTO(String numReferencia) {
+    public AnularTransaccionDTO(String numReferencia, String codigo, String mensaje) {
         this.numReferencia = numReferencia;
+        this.codigo = codigo;
+        this.mensaje = mensaje;
     }
 
     public String getCodigo() {

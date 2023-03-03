@@ -1,11 +1,13 @@
 package com.credibanco.assessment.card.dto;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import jakarta.validation.constraints.*;
 import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Component;
 
 @Component
 @Scope("prototype")
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public class EliminarTarjetaDTO {
     
     @NotBlank(message = "El numero pan es requerido")
@@ -35,7 +37,10 @@ public class EliminarTarjetaDTO {
     }
 
     //ResponseDTO
-    public EliminarTarjetaDTO() { }
+    public EliminarTarjetaDTO(String codigo, String mensaje) {
+        this.codigo = codigo;
+        this.mensaje = mensaje;
+    }
 
     public String getPanConfirm() {
         return panConfirm;
